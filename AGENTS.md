@@ -19,3 +19,5 @@ When you successfully implement a new feature:
 3. `git push origin main`
 
 By pushing to the fork, you ensure your upgrades are safely backed up and can later be submitted as a Pull Request to the upstream `HKUDS/nanobot` repository.
+
+Be careful on pull request. All changes and Pull requests must be targeted at this forked repo only (origin) and NEVER to original repo `HKUDS/nanobot` (upstream).
