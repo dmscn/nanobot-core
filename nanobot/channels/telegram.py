@@ -575,6 +575,17 @@ class TelegramChannel(BaseChannel):
             logger.warning("Callback not found: {} / {}", callback_id, button_id)
             button_def = {"id": button_id, "label": query.data}
         
+        # Build content for agent
+        button_label = button_def.get("label", button_id)
+        button_data = button_def.get("data", "")
+        button_meta = button_def.get("metadata", {})
+        
+        content = f"[CALLBACK] Button clicked: \"{button_label}\" (id: {button_id})"
+        if button_data:
+            content += f"\nInstruction: {button_data}"
+        if button_meta:
+            content += f"\nData: {button_meta}"
+        
         # Build metadata for agent
         sender_id = self._sender_id(query.from_user)
         chat_id = str(query.message.chat_id)
@@ -582,7 +593,7 @@ class TelegramChannel(BaseChannel):
         await self._handle_message(
             sender_id=sender_id,
             chat_id=chat_id,
-            content="",
+            content=content,
             metadata={
                 "event_type": "callback_query",
                 "callback_id": callback_id,
