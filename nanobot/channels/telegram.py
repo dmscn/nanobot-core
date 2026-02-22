@@ -555,6 +555,11 @@ class TelegramChannel(BaseChannel):
         query = update.callback_query
         await query.answer()
         
+        # Check if message still exists (may have been deleted)
+        if not query.message:
+            logger.warning("Callback query received but message was deleted")
+            return
+        
         # Parse callback_data: "callback_id:button_id"
         parts = query.data.split(":", 1)
         if len(parts) != 2:
