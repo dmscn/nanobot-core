@@ -168,25 +168,28 @@ def onboard():
         console.print("  [bold]N[/bold] = refresh config, keeping existing values and adding new fields")
         if typer.confirm("Overwrite?"):
             config = Config()
+            _prompt_timezone(config)
             save_config(config)
             console.print(f"[green]✓[/green] Config reset to defaults at {config_path}")
         else:
             config = load_config()
+            if not config.agents.defaults.user_timezone:
+                _prompt_timezone(config)
             save_config(config)
             console.print(f"[green]✓[/green] Config refreshed at {config_path} (existing values preserved)")
     else:
-        save_config(Config())
+        config = Config()
+        _prompt_timezone(config)
+        save_config(config)
         console.print(f"[green]✓[/green] Created config at {config_path}")
     
-    # Create workspace
     workspace = get_workspace_path()
     
     if not workspace.exists():
         workspace.mkdir(parents=True, exist_ok=True)
         console.print(f"[green]✓[/green] Created workspace at {workspace}")
     
-    # Create default bootstrap files
-    _create_workspace_templates(workspace)
+    _create_workspace_templates(workspace, config)
     
     console.print(f"\n{__logo__} nanobot is ready!")
     console.print("\nNext steps:")
@@ -196,10 +199,33 @@ def onboard():
     console.print("\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/nanobot#-chat-apps[/dim]")
 
 
+def _prompt_timezone(config: Config) -> None:
+    """Prompt user for timezone and validate it."""
+    console.print("\n[cyan]Timezone Configuration[/cyan]")
+    console.print("Enter your IANA timezone (e.g., America/Sao_Paulo, Europe/London, Asia/Tokyo)")
+    console.print("Find yours at: [dim]https://en.wikipedia.org/wiki/List_of_tz_database_time_zones[/dim]")
+    
+    while True:
+        tz_input = typer.prompt("Your timezone", default="", show_default=False)
+        if not tz_input:
+            console.print("[dim]No timezone set - system timezone will be used[/dim]")
+            break
+        try:
+            from zoneinfo import ZoneInfo
+            ZoneInfo(tz_input)
+            config.agents.defaults.user_timezone = tz_input
+            console.print(f"[green]✓[/green] Timezone set to {tz_input}")
+            break
+        except Exception:
+            console.print(f"[red]Invalid timezone '{tz_input}'. Please use IANA format (e.g., America/Sao_Paulo)[/red]")
 
 
-def _create_workspace_templates(workspace: Path):
+
+
+def _create_workspace_templates(workspace: Path, config: Config | None = None):
     """Create default workspace template files."""
+    tz_placeholder = config.agents.defaults.user_timezone if config and config.agents.defaults.user_timezone else "(your IANA timezone, e.g., America/Sao_Paulo)"
+    
     templates = {
         "AGENTS.md": """# Agent Instructions
 
@@ -228,14 +254,14 @@ I am nanobot, a lightweight AI assistant.
 - User privacy and safety
 - Transparency in actions
 """,
-        "USER.md": """# User
+        "USER.md": f"""# User
 
 Information about the user goes here.
 
 ## Preferences
 
 - Communication style: (casual/formal)
-- Timezone: (your timezone)
+- Timezone: {tz_placeholder}
 - Language: (your preferred language)
 """,
     }

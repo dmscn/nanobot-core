@@ -184,10 +184,22 @@ class AgentDefaults(Base):
 
     workspace: str = "~/.nanobot/workspace"
     model: str = "anthropic/claude-opus-4-5"
+    user_timezone: str | None = None  # IANA timezone, e.g. "America/Sao_Paulo"
     max_tokens: int = 8192
     temperature: float = 0.7
     max_tool_iterations: int = 20
     memory_window: int = 50
+
+    def get_validated_timezone(self) -> str | None:
+        """Validate and return the user timezone."""
+        if not self.user_timezone:
+            return None
+        try:
+            from zoneinfo import ZoneInfo
+            ZoneInfo(self.user_timezone)
+            return self.user_timezone
+        except Exception:
+            return None
 
 
 class AgentsConfig(Base):
