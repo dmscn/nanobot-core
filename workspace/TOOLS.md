@@ -66,10 +66,99 @@ web_fetch(url: str, extractMode: str = "markdown", maxChars: int = 50000) -> str
 ## Communication
 
 ### message
-Send a message to the user (used internally).
+Send a message to the user on a chat channel.
 ```
-message(content: str, channel: str = None, chat_id: str = None) -> str
+message(
+    content: str,
+    channel: str = None,
+    chat_id: str = None,
+    media: list[str] = None,
+    callback_id: str = None,
+    inline_buttons: list[dict] = None
+) -> str
 ```
+
+**Parameters:**
+- `content` (required): The message text to send
+- `channel` (optional): Target channel (telegram, discord, etc.)
+- `chat_id` (optional): Target chat/user ID
+- `media` (optional): List of file paths to attach
+- `callback_id` (optional): Logical ID to group callback buttons (auto-generated if not provided)
+- `inline_buttons` (optional): Interactive buttons (Telegram only)
+
+### Inline Buttons (Telegram)
+
+Send interactive buttons with your message to create rich user interactions:
+
+```python
+# Simple confirmation buttons
+inline_buttons = [
+    {"id": "confirm", "label": "✅ Confirm"},
+    {"id": "cancel", "label": "❌ Cancel"}
+]
+
+# Buttons with instructions and metadata
+inline_buttons = [
+    {
+        "id": "complete",
+        "label": "✅ Done",
+        "data": "Mark this task as completed",
+        "metadata": {"task_id": "123"}
+    }
+]
+
+# URL buttons (open link, no callback)
+inline_buttons = [
+    {"label": "Help", "url": "https://help.example.com"}
+]
+
+# Row layouts (multiple buttons per row)
+inline_buttons = [
+    [{"id": "yes", "label": "Yes"}, {"id": "no", "label": "No"}],
+    [{"label": "Help", "url": "https://help.example.com"}]
+]
+
+# Using callback_id to group multiple messages
+callback_id = "reminder_001"
+```
+
+**Button fields:**
+- `id`: Button identifier (used for callbacks)
+- `label`: Text shown on the button
+- `data`: Instructions for the agent when button is clicked
+- `metadata`: Additional structured data
+- `url`: URL for link buttons (no callback)
+
+### Handling Button Callbacks
+
+When a user clicks a button, you receive a special message:
+
+```python
+# You receive this as an InboundMessage:
+{
+    "content": "",  # Empty - this is NOT a user message
+    "metadata": {
+        "event_type": "callback_query",
+        "callback_id": "a1b2c3",
+        "button": {
+            "id": "complete",
+            "label": "✅ Done",
+            "data": "Mark this task as completed",
+            "metadata": {"task_id": "123"}
+        },
+        "user_id": 6176528759,
+        "username": "john_doe",
+        "message_id": 456
+    }
+}
+```
+
+**How to handle:**
+1. Check if `metadata.event_type == "callback_query"` (this is a button click, NOT a user message)
+2. Read `metadata.button.id` to know which button was clicked
+3. Read `metadata.button.data` for instructions on what to do
+4. Use `metadata.button.metadata` for structured data
+5. Execute the action and respond to the user
 
 ## Background Tasks
 
