@@ -59,10 +59,8 @@ class AgentLoop:
         restrict_to_workspace: bool = False,
         session_manager: SessionManager | None = None,
         mcp_servers: dict | None = None,
-        user_timezone: str = "UTC",
     ):
         from nanobot.config.schema import ExecToolConfig
-
         self.bus = bus
         self.provider = provider
         self.workspace = workspace
@@ -75,7 +73,6 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
-        self.user_timezone = user_timezone
 
         self.context = ContextBuilder(workspace)
         self.sessions = session_manager or SessionManager(workspace)
@@ -107,19 +104,17 @@ class AgentLoop:
         allowed_dir = self.workspace if self.restrict_to_workspace else None
         for cls in (ReadFileTool, WriteFileTool, EditFileTool, ListDirTool):
             self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
-        self.tools.register(
-            ExecTool(
-                working_dir=str(self.workspace),
-                timeout=self.exec_config.timeout,
-                restrict_to_workspace=self.restrict_to_workspace,
-            )
-        )
+        self.tools.register(ExecTool(
+            working_dir=str(self.workspace),
+            timeout=self.exec_config.timeout,
+            restrict_to_workspace=self.restrict_to_workspace,
+        ))
         self.tools.register(WebSearchTool(api_key=self.brave_api_key))
         self.tools.register(WebFetchTool())
         self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
         self.tools.register(SpawnTool(manager=self.subagents))
         if self.cron_service:
-            self.tools.register(CronTool(self.cron_service, default_tz=self.user_timezone))
+            self.tools.register(CronTool(self.cron_service))
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
@@ -127,7 +122,6 @@ class AgentLoop:
             return
         self._mcp_connecting = True
         from nanobot.agent.tools.mcp import connect_mcp_servers
-
         try:
             self._mcp_stack = AsyncExitStack()
             await self._mcp_stack.__aenter__()
@@ -168,13 +162,11 @@ class AgentLoop:
     @staticmethod
     def _tool_hint(tool_calls: list) -> str:
         """Format tool calls as concise hint, e.g. 'web_search("query")'."""
-
         def _fmt(tc):
             val = next(iter(tc.arguments.values()), None) if tc.arguments else None
             if not isinstance(val, str):
                 return tc.name
             return f'{tc.name}("{val[:40]}…")' if len(val) > 40 else f'{tc.name}("{val}")'
-
         return ", ".join(_fmt(tc) for tc in tool_calls)
 
     async def _run_agent_loop(
@@ -213,15 +205,13 @@ class AgentLoop:
                         "type": "function",
                         "function": {
                             "name": tc.name,
-                            "arguments": json.dumps(tc.arguments, ensure_ascii=False),
-                        },
+                            "arguments": json.dumps(tc.arguments, ensure_ascii=False)
+                        }
                     }
                     for tc in response.tool_calls
                 ]
                 messages = self.context.add_assistant_message(
-                    messages,
-                    response.content,
-                    tool_call_dicts,
+                    messages, response.content, tool_call_dicts,
                     reasoning_content=response.reasoning_content,
                 )
 
@@ -247,29 +237,25 @@ class AgentLoop:
 
         while self._running:
             try:
-                msg = await asyncio.wait_for(self.bus.consume_inbound(), timeout=1.0)
+                msg = await asyncio.wait_for(
+                    self.bus.consume_inbound(),
+                    timeout=1.0
+                )
                 try:
                     response = await self._process_message(msg)
                     if response is not None:
                         await self.bus.publish_outbound(response)
                     elif msg.channel == "cli":
-                        await self.bus.publish_outbound(
-                            OutboundMessage(
-                                channel=msg.channel,
-                                chat_id=msg.chat_id,
-                                content="",
-                                metadata=msg.metadata or {},
-                            )
-                        )
+                        await self.bus.publish_outbound(OutboundMessage(
+                            channel=msg.channel, chat_id=msg.chat_id, content="", metadata=msg.metadata or {},
+                        ))
                 except Exception as e:
                     logger.error("Error processing message: {}", e)
-                    await self.bus.publish_outbound(
-                        OutboundMessage(
-                            channel=msg.channel,
-                            chat_id=msg.chat_id,
-                            content=f"Sorry, I encountered an error: {str(e)}",
-                        )
-                    )
+                    await self.bus.publish_outbound(OutboundMessage(
+                        channel=msg.channel,
+                        chat_id=msg.chat_id,
+                        content=f"Sorry, I encountered an error: {str(e)}"
+                    ))
             except asyncio.TimeoutError:
                 continue
 
@@ -308,28 +294,22 @@ class AgentLoop:
         """Process a single inbound message and return the response."""
         # System messages: parse origin from chat_id ("channel:chat_id")
         if msg.channel == "system":
-            channel, chat_id = (
-                msg.chat_id.split(":", 1) if ":" in msg.chat_id else ("cli", msg.chat_id)
-            )
+            channel, chat_id = (msg.chat_id.split(":", 1) if ":" in msg.chat_id
+                                else ("cli", msg.chat_id))
             logger.info("Processing system message from {}", msg.sender_id)
             key = f"{channel}:{chat_id}"
             session = self.sessions.get_or_create(key)
             self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
             messages = self.context.build_messages(
                 history=session.get_history(max_messages=self.memory_window),
-                current_message=msg.content,
-                channel=channel,
-                chat_id=chat_id,
+                current_message=msg.content, channel=channel, chat_id=chat_id,
             )
             final_content, _ = await self._run_agent_loop(messages)
             session.add_message("user", f"[System: {msg.sender_id}] {msg.content}")
             session.add_message("assistant", final_content or "Background task completed.")
             self.sessions.save(session)
-            return OutboundMessage(
-                channel=channel,
-                chat_id=chat_id,
-                content=final_content or "Background task completed.",
-            )
+            return OutboundMessage(channel=channel, chat_id=chat_id,
+                                  content=final_content or "Background task completed.")
 
         preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
         logger.info("Processing message from {}:{}: {}", msg.channel, msg.sender_id, preview)
@@ -344,21 +324,19 @@ class AgentLoop:
             self._consolidating.add(session.key)
             try:
                 async with lock:
-                    snapshot = session.messages[session.last_consolidated :]
+                    snapshot = session.messages[session.last_consolidated:]
                     if snapshot:
                         temp = Session(key=session.key)
                         temp.messages = list(snapshot)
                         if not await self._consolidate_memory(temp, archive_all=True):
                             return OutboundMessage(
-                                channel=msg.channel,
-                                chat_id=msg.chat_id,
+                                channel=msg.channel, chat_id=msg.chat_id,
                                 content="Memory archival failed, session not cleared. Please try again.",
                             )
             except Exception:
                 logger.exception("/new archival failed for {}", session.key)
                 return OutboundMessage(
-                    channel=msg.channel,
-                    chat_id=msg.chat_id,
+                    channel=msg.channel, chat_id=msg.chat_id,
                     content="Memory archival failed, session not cleared. Please try again.",
                 )
             finally:
@@ -368,15 +346,11 @@ class AgentLoop:
             session.clear()
             self.sessions.save(session)
             self.sessions.invalidate(session.key)
-            return OutboundMessage(
-                channel=msg.channel, chat_id=msg.chat_id, content="New session started."
-            )
+            return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id,
+                                  content="New session started.")
         if cmd == "/help":
-            return OutboundMessage(
-                channel=msg.channel,
-                chat_id=msg.chat_id,
-                content="🐈 nanobot commands:\n/new — Start a new conversation\n/help — Show available commands",
-            )
+            return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id,
+                                  content="🐈 nanobot commands:\n/new — Start a new conversation\n/help — Show available commands")
 
         if len(session.messages) > self.memory_window and session.key not in self._consolidating:
             self._consolidating.add(session.key)
@@ -405,26 +379,18 @@ class AgentLoop:
             history=session.get_history(max_messages=self.memory_window),
             current_message=msg.content,
             media=msg.media if msg.media else None,
-            channel=msg.channel,
-            chat_id=msg.chat_id,
-            metadata=msg.metadata,
+            channel=msg.channel, chat_id=msg.chat_id,
         )
 
         async def _bus_progress(content: str) -> None:
             meta = dict(msg.metadata or {})
             meta["_progress"] = True
-            await self.bus.publish_outbound(
-                OutboundMessage(
-                    channel=msg.channel,
-                    chat_id=msg.chat_id,
-                    content=content,
-                    metadata=meta,
-                )
-            )
+            await self.bus.publish_outbound(OutboundMessage(
+                channel=msg.channel, chat_id=msg.chat_id, content=content, metadata=meta,
+            ))
 
         final_content, tools_used = await self._run_agent_loop(
-            initial_messages,
-            on_progress=on_progress or _bus_progress,
+            initial_messages, on_progress=on_progress or _bus_progress,
         )
 
         if final_content is None:
@@ -434,9 +400,8 @@ class AgentLoop:
         logger.info("Response to {}:{}: {}", msg.channel, msg.sender_id, preview)
 
         session.add_message("user", msg.content)
-        session.add_message(
-            "assistant", final_content, tools_used=tools_used if tools_used else None
-        )
+        session.add_message("assistant", final_content,
+                            tools_used=tools_used if tools_used else None)
         self.sessions.save(session)
 
         if message_tool := self.tools.get("message"):
@@ -444,20 +409,15 @@ class AgentLoop:
                 return None
 
         return OutboundMessage(
-            channel=msg.channel,
-            chat_id=msg.chat_id,
-            content=final_content,
+            channel=msg.channel, chat_id=msg.chat_id, content=final_content,
             metadata=msg.metadata or {},
         )
 
     async def _consolidate_memory(self, session, archive_all: bool = False) -> bool:
         """Delegate to MemoryStore.consolidate(). Returns True on success."""
         return await MemoryStore(self.workspace).consolidate(
-            session,
-            self.provider,
-            self.model,
-            archive_all=archive_all,
-            memory_window=self.memory_window,
+            session, self.provider, self.model,
+            archive_all=archive_all, memory_window=self.memory_window,
         )
 
     async def process_direct(
@@ -467,18 +427,9 @@ class AgentLoop:
         channel: str = "cli",
         chat_id: str = "direct",
         on_progress: Callable[[str], Awaitable[None]] | None = None,
-        metadata: dict | None = None,
     ) -> str:
         """Process a message directly (for CLI or cron usage)."""
         await self._connect_mcp()
-        msg = InboundMessage(
-            channel=channel,
-            sender_id="user",
-            chat_id=chat_id,
-            content=content,
-            metadata=metadata or {},
-        )
-        response = await self._process_message(
-            msg, session_key=session_key, on_progress=on_progress
-        )
+        msg = InboundMessage(channel=channel, sender_id="user", chat_id=chat_id, content=content)
+        response = await self._process_message(msg, session_key=session_key, on_progress=on_progress)
         return response.content if response else ""
