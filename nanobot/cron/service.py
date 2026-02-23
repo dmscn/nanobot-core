@@ -75,9 +75,6 @@ class CronService:
     
     def _load_store(self) -> CronStore:
         """Load jobs from disk."""
-        if self._store:
-            return self._store
-        
         if self.store_path.exists():
             try:
                 data = json.loads(self.store_path.read_text(encoding="utf-8"))
