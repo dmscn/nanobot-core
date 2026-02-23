@@ -195,6 +195,33 @@ nanobot cron list              # List all jobs
 nanobot cron remove <job_id>   # Remove a job
 ```
 
+### Handling Scheduled Job Triggers
+
+When a scheduled job fires, you receive a message with `metadata.source == "cron"`.
+
+**Metadata structure:**
+```python
+{
+    "source": "cron",           # Mandatory: identifies the origin
+    "job": {
+        "id": "abc123",         # Job identifier
+        "name": "Job name",     # Job name
+        "schedule_kind": "at",  # "at", "every", or "cron"
+    },
+    "payload": {                # Job payload (flexible)
+        "message": "...",
+        "deliver": true,
+        "channel": "telegram",
+        "to": "user_id",
+    }
+}
+```
+
+**How to handle:**
+1. Check `metadata.source == "cron"` to identify the origin
+2. Use `metadata.job` and `metadata.payload` to understand the context
+3. Respond appropriately based on the job's purpose
+
 ## Heartbeat Task Management
 
 The `HEARTBEAT.md` file in the workspace is checked every 30 minutes.

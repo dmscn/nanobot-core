@@ -373,11 +373,26 @@ def gateway(
     # Set cron callback (needs agent)
     async def on_cron_job(job: CronJob) -> str | None:
         """Execute a cron job through the agent."""
+        cron_metadata = {
+            "source": "cron",
+            "job": {
+                "id": job.id,
+                "name": job.name,
+                "schedule_kind": job.schedule.kind,
+            },
+            "payload": {
+                "message": job.payload.message,
+                "deliver": job.payload.deliver,
+                "channel": job.payload.channel,
+                "to": job.payload.to,
+            },
+        }
         response = await agent.process_direct(
             job.payload.message,
             session_key=f"cron:{job.id}",
             channel=job.payload.channel or "cli",
             chat_id=job.payload.to or "direct",
+            metadata=cron_metadata,
         )
         if job.payload.deliver and job.payload.to:
             from nanobot.bus.events import OutboundMessage
