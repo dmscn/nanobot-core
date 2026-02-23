@@ -471,9 +471,10 @@ class AgentLoop:
     ) -> str:
         """Process a message directly (for CLI or cron usage)."""
         await self._connect_mcp()
+        sender_id = "cron" if metadata and metadata.get("source") == "cron" else "user"
         msg = InboundMessage(
             channel=channel,
-            sender_id="user",
+            sender_id=sender_id,
             chat_id=chat_id,
             content=content,
             metadata=metadata or {},
