@@ -984,11 +984,26 @@ def cron_run(
     result_holder = []
 
     async def on_job(job: CronJob) -> str | None:
+        cron_metadata = {
+            "source": "cron",
+            "job": {
+                "id": job.id,
+                "name": job.name,
+                "schedule_kind": job.schedule.kind,
+            },
+            "payload": {
+                "message": job.payload.message,
+                "deliver": job.payload.deliver,
+                "channel": job.payload.channel,
+                "to": job.payload.to,
+            },
+        }
         response = await agent_loop.process_direct(
             job.payload.message,
             session_key=f"cron:{job.id}",
             channel=job.payload.channel or "cli",
             chat_id=job.payload.to or "direct",
+            metadata=cron_metadata,
         )
         result_holder.append(response)
         return response
