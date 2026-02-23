@@ -54,4 +54,4 @@ cron(action="remove", job_id="abc123")
 
 ## Timezone
 
-Use `tz` with `cron_expr` to schedule in a specific IANA timezone. Without `tz`, the server's local timezone is used.
+Use `tz` with `cron_expr` to schedule in a specific IANA timezone. Without `tz`, the user's timezone from config is used (e.g., "America/Sao_Paoulo").
