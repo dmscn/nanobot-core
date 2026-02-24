@@ -374,10 +374,11 @@ def gateway(
     async def on_cron_job(job: CronJob) -> str | None:
         """Execute a cron job through the agent."""
         response = await agent.process_direct(
-            job.payload.message,
+            f'[CRON JOB DISPATCH] Job ID: {job.id} has been triggered. Call cron(action="execute_job", job_id="{job.id}") immediately to retrieve execution instructions.',
             session_key=f"cron:{job.id}",
             channel=job.payload.channel or "cli",
             chat_id=job.payload.to or "direct",
+            metadata={"source": "cron", "job_id": job.id},
         )
         if job.payload.deliver and job.payload.to:
             from nanobot.bus.events import OutboundMessage
@@ -970,10 +971,11 @@ def cron_run(
 
     async def on_job(job: CronJob) -> str | None:
         response = await agent_loop.process_direct(
-            job.payload.message,
+            f'[CRON JOB DISPATCH] Job ID: {job.id} has been triggered. Call cron(action="execute_job", job_id="{job.id}") immediately to retrieve execution instructions.',
             session_key=f"cron:{job.id}",
             channel=job.payload.channel or "cli",
             chat_id=job.payload.to or "direct",
+            metadata={"source": "cron", "job_id": job.id},
         )
         result_holder.append(response)
         return response

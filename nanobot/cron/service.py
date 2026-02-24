@@ -6,7 +6,7 @@ import time
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Coroutine
+from typing import Any, Callable, Coroutine, Literal
 
 from loguru import logger
 
@@ -171,7 +171,10 @@ class CronService:
         self._recompute_next_runs()
         self._save_store()
         self._arm_timer()
-        logger.info("Cron service started with {} jobs", len(self._store.jobs if self._store else []))
+        logger.info(
+            "Cron service started with {} jobs",
+            len(self._store.jobs if self._store else []),
+        )
     
     def stop(self) -> None:
         """Stop the cron service."""
@@ -239,10 +242,9 @@ class CronService:
         logger.info("Cron: executing job '{}' ({})", job.name, job.id)
         
         try:
-            response = None
             if self.on_job:
-                response = await self.on_job(job)
-            
+                await self.on_job(job)
+
             job.state.last_status = "ok"
             job.state.last_error = None
             logger.info("Cron: job '{}' completed", job.name)
@@ -279,6 +281,9 @@ class CronService:
         name: str,
         schedule: CronSchedule,
         message: str,
+        job_type: Literal["echo", "command", "tool_call"] = "command",
+        tool: str | None = None,
+        arguments: dict | None = None,
         deliver: bool = False,
         channel: str | None = None,
         to: str | None = None,
@@ -288,7 +293,7 @@ class CronService:
         store = self._load_store()
         _validate_schedule_for_add(schedule)
         now = _now_ms()
-        
+
         job = CronJob(
             id=str(uuid.uuid4())[:8],
             name=name,
@@ -297,6 +302,9 @@ class CronService:
             payload=CronPayload(
                 kind="agent_turn",
                 message=message,
+                job_type=job_type,
+                tool=tool,
+                arguments=arguments,
                 deliver=deliver,
                 channel=channel,
                 to=to,
@@ -306,12 +314,12 @@ class CronService:
             updated_at_ms=now,
             delete_after_run=delete_after_run,
         )
-        
+
         store.jobs.append(job)
         self._save_store()
         self._arm_timer()
-        
-        logger.info("Cron: added job '{}' ({})", name, job.id)
+
+        logger.info("Cron: added job '{}' ({}, type: {})", name, job.id, job_type)
         return job
     
     def remove_job(self, job_id: str) -> bool:
@@ -320,14 +328,22 @@ class CronService:
         before = len(store.jobs)
         store.jobs = [j for j in store.jobs if j.id != job_id]
         removed = len(store.jobs) < before
-        
+
         if removed:
             self._save_store()
             self._arm_timer()
             logger.info("Cron: removed job {}", job_id)
-        
+
         return removed
-    
+
+    def get_job(self, job_id: str) -> CronJob | None:
+        """Get a job by ID."""
+        store = self._load_store()
+        for job in store.jobs:
+            if job.id == job_id:
+                return job
+        return None
+
     def enable_job(self, job_id: str, enabled: bool = True) -> CronJob | None:
         """Enable or disable a job."""
         store = self._load_store()

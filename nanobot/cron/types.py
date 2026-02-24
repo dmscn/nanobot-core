@@ -23,6 +23,11 @@ class CronPayload:
     """What to do when the job runs."""
     kind: Literal["system_event", "agent_turn"] = "agent_turn"
     message: str = ""
+    # Job type: how the agent should execute this job
+    job_type: Literal["echo", "command", "tool_call"] = "command"
+    # For tool_call type: which tool to call and with what arguments
+    tool: str | None = None
+    arguments: dict | None = None
     # Deliver response to channel
     deliver: bool = False
     channel: str | None = None  # e.g. "whatsapp"
