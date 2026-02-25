@@ -117,6 +117,11 @@ class CronTool(Tool):
             return "Error: no session context (channel/chat_id)"
         if tz and not cron_expr:
             return "Error: tz can only be used with cron_expr"
+
+        # Auto-use user timezone for cron expressions
+        if not tz and cron_expr:
+            tz = self._get_user_timezone()
+
         if tz:
             from zoneinfo import ZoneInfo
 
@@ -156,7 +161,16 @@ class CronTool(Tool):
         jobs = self._cron.list_jobs()
         if not jobs:
             return "No scheduled jobs."
-        lines = [f"- {j.name} (id: {j.id}, {j.schedule.kind})" for j in jobs]
+
+        lines = []
+        for j in jobs:
+            # Format next run with timezone
+            next_run = ""
+            if j.state.next_run_at_ms:
+                next_run = f", next: {self._format_timestamp(j.state.next_run_at_ms)}"
+
+            lines.append(f"- {j.name} (id: {j.id}, {j.schedule.kind}{next_run})")
+
         return "Scheduled jobs:\n" + "\n".join(lines)
 
     def _remove_job(self, job_id: str | None) -> str:
