@@ -97,6 +97,7 @@ class CronService:
                         payload=CronPayload(
                             kind=j["payload"].get("kind", "agent_turn"),
                             message=j["payload"].get("message", ""),
+                            execution_mode=j["payload"].get("execution_mode", "command"),
                             deliver=j["payload"].get("deliver", False),
                             channel=j["payload"].get("channel"),
                             to=j["payload"].get("to"),
@@ -144,6 +145,7 @@ class CronService:
                     "payload": {
                         "kind": j.payload.kind,
                         "message": j.payload.message,
+                        "execution_mode": j.payload.execution_mode,
                         "deliver": j.payload.deliver,
                         "channel": j.payload.channel,
                         "to": j.payload.to,
@@ -273,12 +275,21 @@ class CronService:
         store = self._load_store()
         jobs = store.jobs if include_disabled else [j for j in store.jobs if j.enabled]
         return sorted(jobs, key=lambda j: j.state.next_run_at_ms or float('inf'))
-    
+
+    def get_job(self, job_id: str) -> CronJob | None:
+        """Get a job by ID."""
+        store = self._load_store()
+        for job in store.jobs:
+            if job.id == job_id:
+                return job
+        return None
+
     def add_job(
         self,
         name: str,
         schedule: CronSchedule,
         message: str,
+        execution_mode: str = "command",
         deliver: bool = False,
         channel: str | None = None,
         to: str | None = None,
@@ -288,7 +299,7 @@ class CronService:
         store = self._load_store()
         _validate_schedule_for_add(schedule)
         now = _now_ms()
-        
+
         job = CronJob(
             id=str(uuid.uuid4())[:8],
             name=name,
@@ -297,6 +308,7 @@ class CronService:
             payload=CronPayload(
                 kind="agent_turn",
                 message=message,
+                execution_mode=execution_mode,
                 deliver=deliver,
                 channel=channel,
                 to=to,
@@ -306,12 +318,12 @@ class CronService:
             updated_at_ms=now,
             delete_after_run=delete_after_run,
         )
-        
+
         store.jobs.append(job)
         self._save_store()
         self._arm_timer()
-        
-        logger.info("Cron: added job '{}' ({})", name, job.id)
+
+        logger.info("Cron: added job '{}' ({}, mode: {})", name, job.id, execution_mode)
         return job
     
     def remove_job(self, job_id: str) -> bool:
