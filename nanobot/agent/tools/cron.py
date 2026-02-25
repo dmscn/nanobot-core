@@ -154,6 +154,7 @@ class CronTool(Tool):
             channel=self._channel,
             to=self._chat_id,
             delete_after_run=delete_after,
+            default_tz=self._get_user_timezone(),
         )
         return f"Created job '{job.name}' (id: {job.id})"
 
