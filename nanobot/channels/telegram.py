@@ -141,6 +141,30 @@ class TelegramChannel(BaseChannel):
         self._chat_ids: dict[str, int] = {}  # Map sender_id to chat_id for replies
         self._typing_tasks: dict[str, asyncio.Task] = {}  # chat_id -> typing loop task
         self._pending_callbacks: dict[str, dict] = {}  # callback_id -> {buttons, message_ids}
+        self._callbacks_file = get_workspace_path() / "callbacks.json"
+
+    def _load_callbacks_from_json(self) -> None:
+        """Load callbacks from JSON file on startup."""
+        if self._callbacks_file.exists():
+            try:
+                with open(self._callbacks_file, "r") as f:
+                    data = json.load(f)
+                    self._pending_callbacks = data.get("callbacks", {})
+                    logger.info(
+                        "Loaded {} callbacks from {}",
+                        len(self._pending_callbacks),
+                        self._callbacks_file,
+                    )
+            except Exception as e:
+                logger.warning("Failed to load callbacks.json: {}", e)
+
+    def _save_callbacks_to_json(self) -> None:
+        """Save callbacks to JSON file."""
+        try:
+            with open(self._callbacks_file, "w") as f:
+                json.dump({"callbacks": self._pending_callbacks}, f, indent=2)
+        except Exception as e:
+            logger.warning("Failed to save callbacks.json: {}", e)
 
     async def start(self) -> None:
         """Start the Telegram bot with long polling."""
