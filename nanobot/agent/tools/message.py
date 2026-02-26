@@ -49,25 +49,50 @@ class MessageTool(Tool):
         return {
             "type": "object",
             "properties": {
-                "content": {
-                    "type": "string",
-                    "description": "The message content to send"
-                },
+                "content": {"type": "string", "description": "The message content to send"},
                 "channel": {
                     "type": "string",
-                    "description": "Optional: target channel (telegram, discord, etc.)"
+                    "description": "Optional: target channel (telegram, discord, etc.)",
                 },
-                "chat_id": {
-                    "type": "string",
-                    "description": "Optional: target chat/user ID"
-                },
+                "chat_id": {"type": "string", "description": "Optional: target chat/user ID"},
                 "media": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Optional: list of file paths to attach (images, audio, documents)"
-                }
+                    "description": "Optional: list of file paths to attach (images, audio, documents)",
+                },
+                "callback_id": {
+                    "type": "string",
+                    "description": "Optional: logical ID to group callback buttons (auto-generated if not provided)",
+                },
+                "inline_buttons": {
+                    "type": "array",
+                    "description": 'Optional: inline buttons for Telegram. Each dict = one button. Separate dicts = separate rows. For same row: [[{"id": "a", "label": "A"}, {"id": "b", "label": "B"}]]. Format: [{"id": "btn", "label": "Label", "instruction": "action for agent"}]',
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "string",
+                                "description": "Button identifier for callback",
+                            },
+                            "label": {"type": "string", "description": "Button text shown to user"},
+                            "instruction": {
+                                "type": "string",
+                                "description": "Instruction string for the agent when button is clicked",
+                            },
+                            "metadata": {
+                                "type": "object",
+                                "description": "Additional structured data",
+                            },
+                            "url": {
+                                "type": "string",
+                                "description": "URL for link buttons (no callback)",
+                            },
+                        },
+                        "required": ["label"],
+                    },
+                },
             },
-            "required": ["content"]
+            "required": ["content"],
         }
 
     async def execute(
@@ -77,7 +102,9 @@ class MessageTool(Tool):
         chat_id: str | None = None,
         message_id: str | None = None,
         media: list[str] | None = None,
-        **kwargs: Any
+        callback_id: str | None = None,
+        inline_buttons: list[dict] | None = None,
+        **kwargs: Any,
     ) -> str:
         channel = channel or self._default_channel
         chat_id = chat_id or self._default_chat_id
@@ -89,20 +116,22 @@ class MessageTool(Tool):
         if not self._send_callback:
             return "Error: Message sending not configured"
 
+        # Build metadata
+        metadata: dict[str, Any] = {"message_id": message_id}
+        if callback_id:
+            metadata["callback_id"] = callback_id
+        if inline_buttons:
+            metadata["inline_buttons"] = inline_buttons
+
         msg = OutboundMessage(
-            channel=channel,
-            chat_id=chat_id,
-            content=content,
-            media=media or [],
-            metadata={
-                "message_id": message_id,
-            }
+            channel=channel, chat_id=chat_id, content=content, media=media or [], metadata=metadata
         )
 
         try:
             await self._send_callback(msg)
             self._sent_in_turn = True
             media_info = f" with {len(media)} attachments" if media else ""
-            return f"Message sent to {channel}:{chat_id}{media_info}"
+            buttons_info = f" with {len(inline_buttons)} inline buttons" if inline_buttons else ""
+            return f"Message sent to {channel}:{chat_id}{media_info}{buttons_info}"
         except Exception as e:
             return f"Error sending message: {str(e)}"

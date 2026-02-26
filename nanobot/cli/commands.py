@@ -325,17 +325,20 @@ def gateway(
     async def on_cron_job(job: CronJob) -> str | None:
         """Execute a cron job through the agent."""
         response = await agent.process_direct(
-            job.payload.message,
+            f'[CRON JOB DISPATCH] Job ID: {job.id} has been triggered. '
+            f'Call cron(action="execute_job", job_id="{job.id}") immediately to retrieve execution instructions. '
+            f'Do not acknowledge this message, just proceed to the job execution.',
             session_key=f"cron:{job.id}",
             channel=job.payload.channel or "cli",
             chat_id=job.payload.to or "direct",
+            metadata={"source": "cron", "job_id": job.id},
         )
         if job.payload.deliver and job.payload.to:
             from nanobot.bus.events import OutboundMessage
             await bus.publish_outbound(OutboundMessage(
                 channel=job.payload.channel or "cli",
                 chat_id=job.payload.to,
-                content=response or ""
+                content=response or "",
             ))
         return response
     cron.on_job = on_cron_job
@@ -831,11 +834,13 @@ def cron_list(
         next_run = ""
         if job.state.next_run_at_ms:
             ts = job.state.next_run_at_ms / 1000
+            tz_str = job.schedule.tz or "UTC"
             try:
-                tz = ZoneInfo(job.schedule.tz) if job.schedule.tz else None
-                next_run = _dt.fromtimestamp(ts, tz).strftime("%Y-%m-%d %H:%M")
+                from zoneinfo import ZoneInfo
+                tz = ZoneInfo(tz_str)
+                next_run = _dt.fromtimestamp(ts, tz).strftime("%Y-%m-%d %H:%M %Z")
             except Exception:
-                next_run = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts))
+                next_run = _dt.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") + f" ({tz_str})"
         
         status = "[green]enabled[/green]" if job.enabled else "[dim]disabled[/dim]"
         
@@ -852,6 +857,7 @@ def cron_add(
     cron_expr: str = typer.Option(None, "--cron", "-c", help="Cron expression (e.g. '0 9 * * *')"),
     tz: str | None = typer.Option(None, "--tz", help="IANA timezone for cron (e.g. 'America/Vancouver')"),
     at: str = typer.Option(None, "--at", help="Run once at time (ISO format)"),
+    execution_mode: str = typer.Option("command", "--mode", help="Execution mode: echo (simple reminder) or command (task execution)"),
     deliver: bool = typer.Option(False, "--deliver", "-d", help="Deliver response to channel"),
     to: str = typer.Option(None, "--to", help="Recipient for delivery"),
     channel: str = typer.Option(None, "--channel", help="Channel for delivery (e.g. 'telegram', 'whatsapp')"),
@@ -860,9 +866,13 @@ def cron_add(
     from nanobot.config.loader import get_data_dir
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronSchedule
-    
+
     if tz and not cron_expr:
         console.print("[red]Error: --tz can only be used with --cron[/red]")
+        raise typer.Exit(1)
+
+    if execution_mode not in ("echo", "command"):
+        console.print("[red]Error: --mode must be 'echo' or 'command'[/red]")
         raise typer.Exit(1)
 
     # Determine schedule type
@@ -877,15 +887,16 @@ def cron_add(
     else:
         console.print("[red]Error: Must specify --every, --cron, or --at[/red]")
         raise typer.Exit(1)
-    
+
     store_path = get_data_dir() / "cron" / "jobs.json"
     service = CronService(store_path)
-    
+
     try:
         job = service.add_job(
             name=name,
             schedule=schedule,
             message=message,
+            execution_mode=execution_mode,
             deliver=deliver,
             to=to,
             channel=channel,
@@ -894,7 +905,7 @@ def cron_add(
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1) from e
 
-    console.print(f"[green]✓[/green] Added job '{job.name}' ({job.id})")
+    console.print(f"[green]✓[/green] Added job '{job.name}' ({job.id}, mode: {execution_mode})")
 
 
 @cron_app.command("remove")
