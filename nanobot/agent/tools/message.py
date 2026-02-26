@@ -49,44 +49,50 @@ class MessageTool(Tool):
         return {
             "type": "object",
             "properties": {
-                "content": {
-                    "type": "string",
-                    "description": "The message content to send"
-                },
+                "content": {"type": "string", "description": "The message content to send"},
                 "channel": {
                     "type": "string",
-                    "description": "Optional: target channel (telegram, discord, etc.)"
+                    "description": "Optional: target channel (telegram, discord, etc.)",
                 },
-                "chat_id": {
-                    "type": "string",
-                    "description": "Optional: target chat/user ID"
-                },
+                "chat_id": {"type": "string", "description": "Optional: target chat/user ID"},
                 "media": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Optional: list of file paths to attach (images, audio, documents)"
+                    "description": "Optional: list of file paths to attach (images, audio, documents)",
                 },
                 "callback_id": {
                     "type": "string",
-                    "description": "Optional: logical ID to group callback buttons (auto-generated if not provided)"
+                    "description": "Optional: logical ID to group callback buttons (auto-generated if not provided)",
                 },
                 "inline_buttons": {
                     "type": "array",
-                    "description": "Optional: inline buttons for Telegram. Each dict = one button. Separate dicts = separate rows. For same row: [[{\"id\": \"a\", \"label\": \"A\"}, {\"id\": \"b\", \"label\": \"B\"}]]. Format: [{\"id\": \"btn\", \"label\": \"Label\", \"data\": \"instructions\"}]",
+                    "description": 'Optional: inline buttons for Telegram. Each dict = one button. Separate dicts = separate rows. For same row: [[{"id": "a", "label": "A"}, {"id": "b", "label": "B"}]]. Format: [{"id": "btn", "label": "Label", "instruction": "action for agent"}]',
                     "items": {
                         "type": "object",
                         "properties": {
-                            "id": {"type": "string", "description": "Button identifier for callback"},
+                            "id": {
+                                "type": "string",
+                                "description": "Button identifier for callback",
+                            },
                             "label": {"type": "string", "description": "Button text shown to user"},
-                            "data": {"type": "string", "description": "Instructions for the agent when button is clicked"},
-                            "metadata": {"type": "object", "description": "Additional structured data"},
-                            "url": {"type": "string", "description": "URL for link buttons (no callback)"}
+                            "instruction": {
+                                "type": "string",
+                                "description": "Instruction string for the agent when button is clicked",
+                            },
+                            "metadata": {
+                                "type": "object",
+                                "description": "Additional structured data",
+                            },
+                            "url": {
+                                "type": "string",
+                                "description": "URL for link buttons (no callback)",
+                            },
                         },
-                        "required": ["label"]
-                    }
-                }
+                        "required": ["label"],
+                    },
+                },
             },
-            "required": ["content"]
+            "required": ["content"],
         }
 
     async def execute(
@@ -98,7 +104,7 @@ class MessageTool(Tool):
         media: list[str] | None = None,
         callback_id: str | None = None,
         inline_buttons: list[dict] | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> str:
         channel = channel or self._default_channel
         chat_id = chat_id or self._default_chat_id
@@ -118,11 +124,7 @@ class MessageTool(Tool):
             metadata["inline_buttons"] = inline_buttons
 
         msg = OutboundMessage(
-            channel=channel,
-            chat_id=chat_id,
-            content=content,
-            media=media or [],
-            metadata=metadata
+            channel=channel, chat_id=chat_id, content=content, media=media or [], metadata=metadata
         )
 
         try:
