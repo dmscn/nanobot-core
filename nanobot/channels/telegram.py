@@ -579,12 +579,12 @@ class TelegramChannel(BaseChannel):
 
         # Build toast feedback for user (shows instantly at top of screen)
         button_label = button_def.get("label", button_id)
-        button_data = button_def.get("data", "")
+        button_instruction = button_def.get("instruction", "")
         button_meta = button_def.get("metadata", {})
 
         toast_parts = [f"Clicked: {button_label}"]
-        if button_data:
-            toast_parts.append(f" | {button_data}")
+        if button_instruction:
+            toast_parts.append(f" | {button_instruction}")
         toast_text = "".join(toast_parts)[:200]  # Telegram limit
 
         # Show toast immediately (required to stop loading spinner)
@@ -592,8 +592,8 @@ class TelegramChannel(BaseChannel):
 
         # Build content for agent (arrives after toast)
         content = f"[CALLBACK] Button clicked: \"{button_label}\" (id: {button_id})"
-        if button_data:
-            content += f"\nInstruction: {button_data}"
+        if button_instruction:
+            content += f"\nInstruction: {button_instruction}"
         if button_meta:
             content += f"\nData: {button_meta}"
         
