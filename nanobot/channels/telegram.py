@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
+from pathlib import Path
 from uuid import uuid4
 from loguru import logger
 from telegram import BotCommand, Update, ReplyParameters, InlineKeyboardButton, InlineKeyboardMarkup
@@ -14,6 +16,7 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import TelegramConfig
+from nanobot.utils.helpers import get_workspace_path
 
 
 def _markdown_to_telegram_html(text: str) -> str:
@@ -135,6 +138,9 @@ class TelegramChannel(BaseChannel):
         if not self.config.token:
             logger.error("Telegram bot token not configured")
             return
+        
+        # Load callbacks from JSON on startup
+        self._load_callbacks_from_json()
         
         self._running = True
         
@@ -544,6 +550,9 @@ class TelegramChannel(BaseChannel):
         
         self._pending_callbacks[callback_id]["message_ids"].append(message_id)
         logger.debug("Stored callback {} with message_id={}", callback_id, message_id)
+
+        # Persist to JSON
+        self._save_callbacks_to_json()
 
     def _get_callback(self, callback_id: str, button_id: str) -> dict | None:
         """Retrieve button definition for a callback."""
