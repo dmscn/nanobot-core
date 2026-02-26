@@ -72,7 +72,7 @@ class MessageTool(Tool):
                 },
                 "inline_buttons": {
                     "type": "array",
-                    "description": "Optional: inline buttons for Telegram. Format: [{\"id\": \"btn\", \"label\": \"Label\", \"data\": \"instructions\", \"metadata\": {...}}] or [{\"label\": \"Link\", \"url\": \"https://...\"}]",
+                    "description": "Optional: inline buttons for Telegram. Each dict = one button. Separate dicts = separate rows. For same row: [[{\"id\": \"a\", \"label\": \"A\"}, {\"id\": \"b\", \"label\": \"B\"}]]. Format: [{\"id\": \"btn\", \"label\": \"Label\", \"data\": \"instructions\"}]",
                     "items": {
                         "type": "object",
                         "properties": {
