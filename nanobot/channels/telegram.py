@@ -559,27 +559,38 @@ class TelegramChannel(BaseChannel):
         
         # Check if message still exists (may have been deleted)
         if not query.message:
+            await query.answer(text="Message no longer available", show_alert=False)
             logger.warning("Callback query received but message was deleted")
             return
         
         # Parse callback_data: "callback_id:button_id"
         parts = query.data.split(":", 1)
         if len(parts) != 2:
+            await query.answer(text="Invalid button data", show_alert=False)
             logger.warning("Invalid callback_data format: {}", query.data)
             return
         
         callback_id, button_id = parts
         button_def = self._get_callback(callback_id, button_id)
-        
+
         if not button_def:
             logger.warning("Callback not found: {} / {}", callback_id, button_id)
             button_def = {"id": button_id, "label": query.data}
-        
-        # Build content for agent
+
+        # Build toast feedback for user (shows instantly at top of screen)
         button_label = button_def.get("label", button_id)
         button_data = button_def.get("data", "")
         button_meta = button_def.get("metadata", {})
-        
+
+        toast_parts = [f"Clicked: {button_label}"]
+        if button_data:
+            toast_parts.append(f" | {button_data}")
+        toast_text = "".join(toast_parts)[:200]  # Telegram limit
+
+        # Show toast immediately (required to stop loading spinner)
+        await query.answer(text=toast_text, show_alert=False)
+
+        # Build content for agent (arrives after toast)
         content = f"[CALLBACK] Button clicked: \"{button_label}\" (id: {button_id})"
         if button_data:
             content += f"\nInstruction: {button_data}"
