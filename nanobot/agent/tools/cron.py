@@ -228,9 +228,9 @@ Output the following reminder message:
 
 ### EXECUTION
 
-1. Analyze the task and determine the best approach
-2. Use tools if needed, or respond directly if appropriate
-3. Send the result to the recipient (delivery enabled)"""
+1. Execute the task silently
+2. Do NOT acknowledge or confirm the task to the user
+3. Only respond if user interaction is required"""
 
         return f"""## CRON JOB: {job.name}
 
