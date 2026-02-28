@@ -193,6 +193,7 @@ class TelegramChannel(BaseChannel):
         self._app.add_handler(CommandHandler("start", self._on_start))
         self._app.add_handler(CommandHandler("new", self._forward_command))
         self._app.add_handler(CommandHandler("help", self._on_help))
+        self._app.add_handler(CommandHandler("logs", self._on_logs))
 
         # Add message handler for text, photos, voice, documents
         self._app.add_handler(
@@ -380,8 +381,41 @@ class TelegramChannel(BaseChannel):
             "🐈 nanobot commands:\n"
             "/new — Start a new conversation\n"
             "/stop — Stop the current task\n"
-            "/help — Show available commands"
+            "/help — Show available commands\n"
+            "/logs <n> — Show last n log lines"
         )
+
+    async def _on_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /logs command to retrieve recent log lines."""
+        if not update.message:
+            return
+
+        args = context.args
+        try:
+            n = int(args[0]) if args else 50
+            n = min(max(n, 1), 200)
+        except (ValueError, IndexError):
+            n = 50
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "docker",
+                "logs",
+                "--tail",
+                str(n),
+                "nanobot",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            stdout, _ = await proc.communicate()
+            logs = stdout.decode("utf-8", errors="replace").strip()
+        except Exception as e:
+            logs = f"Error fetching logs: {e}"
+
+        if len(logs) > 3500:
+            logs = logs[:3500] + "\n\n... (truncated)"
+
+        await update.message.reply_text(f"<pre>{logs}</pre>", parse_mode="HTML")
 
     @staticmethod
     def _sender_id(user) -> str:
