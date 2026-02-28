@@ -83,13 +83,16 @@ Compose messages based on user intent. Do not copy user's exact words."""
                 "at": {
                     "type": "string",
                     "description": (
-                        "ISO datetime for one-time execution"
-                        " (e.g. '2026-02-12T10:30:00')"
+                        "ISO datetime for one-time execution (e.g. '2026-02-12T10:30:00')"
                     ),
                 },
                 "job_id": {
                     "type": "string",
                     "description": "Job ID (for remove or execute_job)",
+                },
+                "deliver": {
+                    "type": "boolean",
+                    "description": "Whether to deliver the agent's response to the user. For command mode tasks that send their own messages, set to False to avoid duplicate delivery.",
                 },
             },
             "required": ["action"],
@@ -100,6 +103,7 @@ Compose messages based on user intent. Do not copy user's exact words."""
         action: str,
         message: str = "",
         execution_mode: Literal["echo", "command"] | None = None,
+        deliver: bool | None = None,
         every_seconds: int | None = None,
         cron_expr: str | None = None,
         tz: str | None = None,
@@ -108,7 +112,7 @@ Compose messages based on user intent. Do not copy user's exact words."""
         **kwargs: Any,
     ) -> str:
         if action == "add":
-            return self._add_job(message, execution_mode, every_seconds, cron_expr, tz, at)
+            return self._add_job(message, execution_mode, deliver, every_seconds, cron_expr, tz, at)
         elif action == "list":
             return self._list_jobs()
         elif action == "remove":
@@ -121,6 +125,7 @@ Compose messages based on user intent. Do not copy user's exact words."""
         self,
         message: str,
         execution_mode: Literal["echo", "command"] | None = None,
+        deliver: bool | None = None,
         every_seconds: int | None = None,
         cron_expr: str | None = None,
         tz: str | None = None,
@@ -163,7 +168,7 @@ Compose messages based on user intent. Do not copy user's exact words."""
             schedule=schedule,
             message=message,
             execution_mode=execution_mode,
-            deliver=True,
+            deliver=deliver if deliver is not None else True,
             channel=self._channel,
             to=self._chat_id,
             delete_after_run=delete_after,
@@ -187,10 +192,16 @@ Compose messages based on user intent. Do not copy user's exact words."""
         tz_str = job.schedule.tz or "UTC"
         try:
             from zoneinfo import ZoneInfo
+
             tz = ZoneInfo(tz_str)
-            created = datetime.fromtimestamp(job.created_at_ms / 1000, tz=tz).strftime("%Y-%m-%d %H:%M %Z")
+            created = datetime.fromtimestamp(job.created_at_ms / 1000, tz=tz).strftime(
+                "%Y-%m-%d %H:%M %Z"
+            )
         except Exception:
-            created = datetime.fromtimestamp(job.created_at_ms / 1000).strftime("%Y-%m-%d %H:%M") + f" ({tz_str})"
+            created = (
+                datetime.fromtimestamp(job.created_at_ms / 1000).strftime("%Y-%m-%d %H:%M")
+                + f" ({tz_str})"
+            )
 
         # Delivery info
         delivery_status = "No"
@@ -262,10 +273,13 @@ Output the following reminder message:
                 tz_str = j.schedule.tz or "UTC"
                 try:
                     from zoneinfo import ZoneInfo
+
                     tz = ZoneInfo(tz_str)
                     next_run_str = datetime.fromtimestamp(ts, tz).strftime("%Y-%m-%d %H:%M %Z")
                 except Exception:
-                    next_run_str = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") + f" ({tz_str})"
+                    next_run_str = (
+                        datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") + f" ({tz_str})"
+                    )
                 next_run = f", next: {next_run_str}"
 
             lines.append(f"- {j.name} (id: {j.id}, {j.schedule.kind}{next_run})")
